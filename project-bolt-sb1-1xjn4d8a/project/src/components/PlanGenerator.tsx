@@ -4,13 +4,11 @@ import ApiClient from '../api.js';
 
 interface PlanGeneratorProps {
   user: any;
-  imageAnalysis: any;
-  userData: any;
   onComplete: (plan: any) => void;
   onBack: () => void;
 }
 
-function PlanGenerator({ user, imageAnalysis, userData, onComplete, onBack }: PlanGeneratorProps) {
+function PlanGenerator({ user, onComplete, onBack }: PlanGeneratorProps) {
   const [fitnessGoal, setFitnessGoal] = useState('');
   const [daysPerWeek, setDaysPerWeek] = useState(4);
   const [activityLevel, setActivityLevel] = useState('moderate');

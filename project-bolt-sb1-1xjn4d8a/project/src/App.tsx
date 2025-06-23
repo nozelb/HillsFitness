@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Dumbbell, Target, Camera, BarChart3 } from 'lucide-react';
+import { User as UserIcon, Dumbbell, Target, Camera, BarChart3 } from 'lucide-react';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
@@ -68,7 +68,7 @@ function App() {
 
   const renderStepIndicator = () => {
     const steps = [
-      { id: 'dashboard', name: 'Start', icon: User, completed: true },
+      { id: 'dashboard', name: 'Start', icon: UserIcon, completed: true },
       { id: 'image', name: 'Photo', icon: Camera, completed: imageAnalysis !== null },
       { id: 'userdata', name: 'Data', icon: BarChart3, completed: userData !== null },
       { id: 'generate', name: 'Goals', icon: Target, completed: false },
