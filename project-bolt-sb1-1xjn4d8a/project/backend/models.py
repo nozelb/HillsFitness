@@ -72,6 +72,60 @@ class MealSuggestion(BaseModel):
 
 class GeneratedPlan(BaseModel):
     id: str
-    workout_plan: List[WorkoutDay]
-    nutrition_plan: Dict[str, Any]  # Contains targets and meal suggestions
+    workout_plan: List[Dict[str, Any]]  # Changed to Dict for serialization
+    nutrition_plan: Dict[str, Any]
     rationale: str
+
+# NEW: Progress tracking models
+class ProgressEntry(BaseModel):
+    date: str  # YYYY-MM-DD format
+    weight: Optional[float] = None
+    energy_level: Optional[int] = None  # 1-10 scale
+    mood: Optional[int] = None  # 1-10 scale
+    sleep_hours: Optional[float] = None
+    water_intake_liters: Optional[float] = None
+    notes: Optional[str] = None
+
+class WorkoutLog(BaseModel):
+    workout_name: str
+    duration_minutes: int
+    exercises_completed: List[Dict[str, Any]]  # List of completed exercises with actual reps/sets
+    difficulty_rating: Optional[int] = None  # 1-10 scale
+    notes: Optional[str] = None
+
+class WeightEntry(BaseModel):
+    weight: float  # kg
+    body_fat_percentage: Optional[float] = None
+    muscle_percentage: Optional[float] = None
+    notes: Optional[str] = None
+
+class BodyMeasurements(BaseModel):
+    chest_cm: Optional[float] = None
+    waist_cm: Optional[float] = None
+    hips_cm: Optional[float] = None
+    bicep_cm: Optional[float] = None
+    thigh_cm: Optional[float] = None
+    notes: Optional[str] = None
+
+# Dashboard response models
+class DashboardStats(BaseModel):
+    current_weight: Optional[float] = None
+    weight_change_7d: Optional[float] = None
+    weight_change_30d: Optional[float] = None
+    workouts_this_week: int
+    total_workout_time_week: int  # minutes
+    current_streak: int  # days
+    next_workout: Optional[Dict[str, Any]] = None
+
+class TodaysFocus(BaseModel):
+    workout_scheduled: Optional[Dict[str, Any]] = None
+    nutrition_targets: Optional[Dict[str, Any]] = None
+    progress_logged: bool
+    motivational_message: str
+
+class DashboardResponse(BaseModel):
+    stats: DashboardStats
+    todays_focus: TodaysFocus
+    recent_progress: List[Dict[str, Any]]
+    weight_trend: List[Dict[str, Any]]
+    workout_frequency: List[Dict[str, Any]]

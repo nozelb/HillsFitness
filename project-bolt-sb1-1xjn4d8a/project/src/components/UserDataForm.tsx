@@ -46,24 +46,36 @@ function UserDataForm({ user, onComplete, onBack }: UserDataFormProps) {
     setError('');
 
     try {
+      // Helper function to convert empty strings to null
+      const parseOrNull = (value: string) => {
+        const trimmed = value.trim();
+        return trimmed === '' ? null : parseFloat(trimmed);
+      };
+
       const userData = {
         weight: parseFloat(formData.weight),
         height: parseFloat(formData.height),
         age: parseInt(formData.age),
         sex: formData.sex,
         smart_scale: {
-          body_fat_percentage: formData.smart_scale.body_fat_percentage ? 
-            parseFloat(formData.smart_scale.body_fat_percentage) : null,
-          muscle_percentage: formData.smart_scale.muscle_percentage ? 
-            parseFloat(formData.smart_scale.muscle_percentage) : null,
-          visceral_fat: formData.smart_scale.visceral_fat ? 
-            parseFloat(formData.smart_scale.visceral_fat) : null,
+          body_fat_percentage: parseOrNull(formData.smart_scale.body_fat_percentage),
+          muscle_percentage: parseOrNull(formData.smart_scale.muscle_percentage),
+          visceral_fat: parseOrNull(formData.smart_scale.visceral_fat),
         }
       };
+
+      // Only include smart_scale if at least one field has a value
+      const hasSmartScaleData = Object.values(userData.smart_scale).some(value => value !== null);
+      if (!hasSmartScaleData) {
+        userData.smart_scale = null;
+      }
+
+      console.log('DEBUG: Sending userData:', JSON.stringify(userData, null, 2));
 
       await ApiClient.storeUserData(userData, user.access_token);
       onComplete(userData);
     } catch (err: any) {
+      console.error('DEBUG: Error submitting user data:', err);
       setError(err.message);
     } finally {
       setLoading(false);
