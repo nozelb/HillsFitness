@@ -6,7 +6,7 @@ def generate_workout_plan(
     image_analysis: Optional[Dict[str, Any]],
     goal: str,
     days_per_week: int = 4
-) -> List[WorkoutDay]:
+) -> List[Dict[str, Any]]:  # Return List[Dict] instead of List[WorkoutDay]
     """
     Generate evidence-based workout plan following ACSM guidelines
     """
@@ -103,26 +103,26 @@ def generate_workout_plan(
             selected_exercises = exercises_db[muscle_group][:2]
             
             for exercise_info in selected_exercises:
-                exercise = Exercise(
-                    name=exercise_info["name"],
-                    sets=sets,
-                    reps=rep_range,
-                    rest_seconds=rest_time,
-                    notes=f"Focus on controlled movement and proper form"
-                )
-                exercises.append(exercise)
+                exercise_dict = {
+                    "name": exercise_info["name"],
+                    "sets": sets,
+                    "reps": rep_range,
+                    "rest_seconds": rest_time,
+                    "notes": "Focus on controlled movement and proper form"
+                }
+                exercises.append(exercise_dict)
                 
                 # Estimate duration (sets * (work_time + rest_time))
                 work_time = 30  # Average time per set
                 exercise_duration = sets * (work_time + rest_time) / 60  # Convert to minutes
                 total_duration += exercise_duration
         
-        workout_day = WorkoutDay(
-            day=day_info["day"],
-            muscle_groups=day_info["muscle_groups"],
-            exercises=exercises,
-            estimated_duration_minutes=int(total_duration)
-        )
-        workout_plan.append(workout_day)
+        workout_day_dict = {
+            "day": day_info["day"],
+            "muscle_groups": day_info["muscle_groups"],
+            "exercises": exercises,
+            "estimated_duration_minutes": int(total_duration)
+        }
+        workout_plan.append(workout_day_dict)
     
     return workout_plan

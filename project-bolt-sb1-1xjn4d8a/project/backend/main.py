@@ -236,14 +236,38 @@ async def store_user_data(
 
 @app.post("/api/generate-plan", response_model=GeneratedPlan)
 async def generate_plan(
-    plan_request: PlanRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Generate personalized workout and nutrition plan"""
     try:
+        # Get raw request body for debugging
+        raw_body = await request.body()
+        print(f"DEBUG PLAN: Raw request body: {raw_body.decode()}")
+        
+        # Parse JSON manually to see what we're getting
+        import json
+        try:
+            raw_data = json.loads(raw_body.decode())
+            print(f"DEBUG PLAN: Parsed raw data: {raw_data}")
+        except Exception as parse_error:
+            print(f"DEBUG PLAN: Failed to parse JSON: {parse_error}")
+        
+        # Now try to validate with Pydantic
+        try:
+            plan_request = PlanRequest.parse_raw(raw_body)
+            print(f"DEBUG PLAN: Successfully parsed PlanRequest: {plan_request}")
+        except ValidationError as ve:
+            print(f"DEBUG PLAN: Pydantic validation failed: {ve}")
+            print(f"DEBUG PLAN: Validation errors: {ve.errors()}")
+            raise HTTPException(status_code=422, detail=ve.errors())
+        
         # Get user's latest data
         user_data = db.get_latest_user_data(current_user["id"])
         image_analysis = db.get_latest_image_analysis(current_user["id"])
+        
+        print(f"DEBUG PLAN: User data from DB: {user_data}")
+        print(f"DEBUG PLAN: Image analysis from DB: {image_analysis}")
         
         if not user_data:
             raise HTTPException(status_code=400, detail="User data required")
@@ -256,6 +280,8 @@ async def generate_plan(
             days_per_week=plan_request.days_per_week
         )
         
+        print(f"DEBUG PLAN: Generated workout plan: {workout_plan}")
+        
         # Generate nutrition plan
         nutrition_plan = generate_nutrition_plan(
             user_data=user_data,
@@ -263,6 +289,8 @@ async def generate_plan(
             goal=plan_request.fitness_goal,
             activity_level=plan_request.activity_level
         )
+        
+        print(f"DEBUG PLAN: Generated nutrition plan: {nutrition_plan}")
         
         # Store generated plan
         plan_data = {
@@ -276,16 +304,27 @@ async def generate_plan(
         
         db.store_plan(current_user["id"], plan_data)
         
-        return GeneratedPlan(
-            id=plan_data["id"],
-            workout_plan=workout_plan,
-            nutrition_plan=nutrition_plan,
-            rationale="Plan generated based on your physique analysis, goals, and evidence-based fitness principles."
-        )
+        # Try to create the response model
+        try:
+            result = GeneratedPlan(
+                id=plan_data["id"],
+                workout_plan=workout_plan,
+                nutrition_plan=nutrition_plan,
+                rationale="Plan generated based on your physique analysis, goals, and evidence-based fitness principles."
+            )
+            print(f"DEBUG PLAN: Successfully created GeneratedPlan response: {result}")
+            return result
+        except ValidationError as ve:
+            print(f"DEBUG PLAN: Failed to create GeneratedPlan response: {ve}")
+            print(f"DEBUG PLAN: Response validation errors: {ve.errors()}")
+            raise HTTPException(status_code=500, detail=f"Response validation failed: {ve.errors()}")
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"DEBUG PLAN: General error: {str(e)}")
+        import traceback
+        print(f"DEBUG PLAN: Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Plan generation failed: {str(e)}")
 
 @app.get("/api/plans")
