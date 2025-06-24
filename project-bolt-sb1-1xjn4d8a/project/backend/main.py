@@ -2,6 +2,11 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Req
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
+from database.database import EnhancedGymDatabase
+from api.profile import router as profile_router
+from api.plans import router as plans_router
+from api.dashboard import router as dashboard_router
+from api.notifications import router as notifications_router
 import os
 import json
 import uuid
@@ -50,7 +55,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 # Database
-db = Database()
+db = EnhancedGymDatabase()
 
 # Upload directory
 UPLOAD_DIR = "uploads"
@@ -610,3 +615,7 @@ async def get_workout_history(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+app.include_router(profile_router)
+app.include_router(plans_router)
+app.include_router(dashboard_router)
+app.include_router(notifications_router)

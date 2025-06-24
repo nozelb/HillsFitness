@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { User, Dumbbell, Target, Camera, BarChart3 } from 'lucide-react';
 import Login from './components/Login';
 import Register from './components/Register';
-import Dashboard from './components/Dashboard';
+import Dashboard from './pages/Dashboard';
 import ImageUpload from './components/ImageUpload';
 import UserDataForm from './components/UserDataForm';
-import PlanGenerator from './components/PlanGenerator';
-import PlanView from './components/PlanView';
+import PlanGenerator from './pages/PlanGenerator';
+import PlanView from './pages/PlanView';
 
 interface User {
   id: string;

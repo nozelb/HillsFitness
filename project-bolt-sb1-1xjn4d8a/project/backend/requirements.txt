@@ -13,3 +13,10 @@ reportlab==4.2.0
 aiofiles==23.2.1
 python-dotenv==1.0.1
 email-validator==2.2.0
+reportlab==4.2.0
+celery==5.3.0
+redis==4.5.0
+python-crontab==2.7.0
+pydantic-settings==2.0.0
+python-dateutil==2.8.0
+validators==0.20.0
