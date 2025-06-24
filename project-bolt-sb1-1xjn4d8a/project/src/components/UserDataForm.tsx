@@ -70,9 +70,12 @@ function UserDataForm({ user, onComplete, onBack }: UserDataFormProps) {
         userData.smart_scale = null;
       }
 
+      console.log('DEBUG: Sending userData:', JSON.stringify(userData, null, 2));
+
       await ApiClient.storeUserData(userData, user.access_token);
       onComplete(userData);
     } catch (err: any) {
+      console.error('DEBUG: Error submitting user data:', err);
       setError(err.message);
     } finally {
       setLoading(false);

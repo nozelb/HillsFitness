@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
@@ -12,6 +12,7 @@ from typing import Optional, List
 import aiofiles
 from PIL import Image
 import io
+from pydantic import ValidationError
 
 from models import (
     UserCreate, UserLogin, UserResponse, UserData, 
@@ -191,18 +192,46 @@ async def upload_image(
 
 @app.post("/api/user-data")
 async def store_user_data(
-    user_data: UserData,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """Store user's physical data"""
     try:
+        # Get raw request body for debugging
+        raw_body = await request.body()
+        print(f"DEBUG: Raw request body: {raw_body.decode()}")
+        
+        # Parse JSON manually to see what we're getting
+        import json
+        try:
+            raw_data = json.loads(raw_body.decode())
+            print(f"DEBUG: Parsed raw data: {raw_data}")
+        except Exception as parse_error:
+            print(f"DEBUG: Failed to parse JSON: {parse_error}")
+        
+        # Now try to validate with Pydantic
+        try:
+            user_data = UserData.parse_raw(raw_body)
+            print(f"DEBUG: Successfully parsed UserData: {user_data}")
+        except ValidationError as ve:
+            print(f"DEBUG: Pydantic validation failed: {ve}")
+            print(f"DEBUG: Validation errors: {ve.errors()}")
+            raise HTTPException(status_code=422, detail=ve.errors())
+        
+        print(f"DEBUG: user_data.dict(): {user_data.dict()}")
+        
         data = user_data.dict()
         data["user_id"] = current_user["id"]
         data["created_at"] = datetime.utcnow().isoformat()
         
+        print(f"DEBUG: Final data to store: {data}")
+        
         db.store_user_data(current_user["id"], data)
         return {"message": "User data stored successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"DEBUG: General error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to store user data: {str(e)}")
 
 @app.post("/api/generate-plan", response_model=GeneratedPlan)
