@@ -134,14 +134,27 @@ async def register(user: UserCreate):
 async def login(user: UserLogin):
     """Login user and return access token"""
     try:
+        print(f"DEBUG LOGIN: Attempting login for email: {user.email}")
+        
         db_user = db.get_user_by_email(user.email)
-        if not db_user or not verify_password(user.password, db_user["hashed_password"]):
+        print(f"DEBUG LOGIN: Found user: {db_user}")
+        
+        if not db_user:
+            print("DEBUG LOGIN: User not found")
             raise HTTPException(status_code=401, detail="Incorrect email or password")
+            
+        if not verify_password(user.password, db_user["hashed_password"]):
+            print("DEBUG LOGIN: Password verification failed")
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        
+        print("DEBUG LOGIN: Password verified, creating token")
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
+        
+        print(f"DEBUG LOGIN: Token created, returning response")
         
         return UserResponse(
             id=db_user["id"],
@@ -153,6 +166,9 @@ async def login(user: UserLogin):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"DEBUG LOGIN: General error: {str(e)}")
+        import traceback
+        print(f"DEBUG LOGIN: Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/api/upload-image", response_model=ImageAnalysisResult)
@@ -342,6 +358,26 @@ async def get_user_plans(current_user: dict = Depends(get_current_user)):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/api/debug/users")
+async def debug_users():
+    """Debug endpoint to check user data structure"""
+    try:
+        all_users = db.users.all()
+        print(f"DEBUG: All users from TinyDB: {all_users}")
+        
+        # Also check the raw file
+        try:
+            with open("gym_coach.json", 'r') as f:
+                raw_data = json.load(f)
+                print(f"DEBUG: Raw database content: {raw_data}")
+                return {"tinydb_users": all_users, "raw_data": raw_data}
+        except Exception as e:
+            print(f"DEBUG: Error reading raw file: {e}")
+            return {"tinydb_users": all_users, "error": str(e)}
+    except Exception as e:
+        print(f"DEBUG: Error in debug endpoint: {e}")
+        return {"error": str(e)}
 
 # NEW: Progress tracking endpoints
 @app.get("/api/dashboard", response_model=DashboardResponse)

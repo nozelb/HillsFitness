@@ -123,6 +123,51 @@ class ApiClient {
   async healthCheck() {
     return this.request('/health');
   }
+
+  // NEW: Dashboard and progress tracking endpoints
+  async getDashboard(token) {
+    return this.requestWithAuth('/dashboard', token);
+  }
+
+  async logProgress(progressData, token) {
+    return this.requestWithAuth('/progress', token, {
+      method: 'POST',
+      body: JSON.stringify(progressData),
+    });
+  }
+
+  async logWorkout(workoutData, token) {
+    return this.requestWithAuth('/workout-log', token, {
+      method: 'POST',
+      body: JSON.stringify(workoutData),
+    });
+  }
+
+  async logWeight(weightData, token) {
+    return this.requestWithAuth('/weight', token, {
+      method: 'POST',
+      body: JSON.stringify(weightData),
+    });
+  }
+
+  async logMeasurements(measurementData, token) {
+    return this.requestWithAuth('/measurements', token, {
+      method: 'POST',
+      body: JSON.stringify(measurementData),
+    });
+  }
+
+  async getProgressHistory(days = 30, token) {
+    return this.requestWithAuth(`/progress-history?days=${days}`, token);
+  }
+
+  async getWeightHistory(days = 90, token) {
+    return this.requestWithAuth(`/weight-history?days=${days}`, token);
+  }
+
+  async getWorkoutHistory(days = 30, token) {
+    return this.requestWithAuth(`/workout-history?days=${days}`, token);
+  }
 }
 
 export default new ApiClient();
