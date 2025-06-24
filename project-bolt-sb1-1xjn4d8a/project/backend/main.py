@@ -99,10 +99,16 @@ async def root():
 async def register(user: UserCreate):
     """Register a new user"""
     try:
-        if db.get_user_by_email(user.email):
+        print(f"DEBUG REGISTER: Attempting to register user: {user.email}")
+        
+        existing_user = db.get_user_by_email(user.email)
+        if existing_user:
+            print(f"DEBUG REGISTER: User already exists: {user.email}")
             raise HTTPException(status_code=400, detail="Email already registered")
         
+        print("DEBUG REGISTER: Hashing password...")
         hashed_password = get_password_hash(user.password)
+        
         user_data = {
             "id": str(uuid.uuid4()),
             "email": user.email,
@@ -111,13 +117,16 @@ async def register(user: UserCreate):
             "created_at": datetime.utcnow().isoformat()
         }
         
+        print(f"DEBUG REGISTER: Creating user with data: {user_data}")
         db.create_user(user_data)
         
+        print("DEBUG REGISTER: Creating access token...")
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
         
+        print("DEBUG REGISTER: Registration successful!")
         return UserResponse(
             id=user_data["id"],
             email=user.email,
@@ -128,6 +137,9 @@ async def register(user: UserCreate):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"DEBUG REGISTER: General error: {str(e)}")
+        import traceback
+        print(f"DEBUG REGISTER: Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/api/login", response_model=UserResponse)

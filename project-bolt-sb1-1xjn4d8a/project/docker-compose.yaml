@@ -10,6 +10,7 @@ services:
     volumes:
       - ./backend:/app
       - uploads_data:/app/uploads
+      - database_data:/app/data
     environment:
       - PYTHONPATH=/app
     restart: unless-stopped
@@ -26,3 +27,4 @@ services:
 
 volumes:
   uploads_data:
+  database_data:
