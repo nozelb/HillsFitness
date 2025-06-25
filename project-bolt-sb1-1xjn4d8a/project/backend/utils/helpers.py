@@ -1,7 +1,9 @@
+# utils/helpers.py - Utility functions
+
 import re
 import math
-from typing import Dict, List, Any, Optional
-from datetime import datetime, date, timedelta
+from typing import Dict, List, Any
+from datetime import datetime, date
 
 def calculate_bmr(weight_kg: float, height_cm: float, age: int, sex: str) -> float:
     """Calculate Basal Metabolic Rate using Harris-Benedict equation"""
@@ -39,7 +41,7 @@ def classify_bmi(bmi: float) -> str:
         return "obese"
 
 def estimate_body_fat_navy(waist_cm: float, neck_cm: float, height_cm: float, 
-                          sex: str, hip_cm: Optional[float] = None) -> float:
+                          sex: str, hip_cm: float = None) -> float:
     """Estimate body fat using US Navy method"""
     try:
         if sex.lower() == "male":
@@ -134,7 +136,7 @@ def format_exercise_name(name: str) -> str:
 def calculate_plan_completion_percentage(plan_start: date, plan_duration_weeks: int = 4) -> float:
     """Calculate how much of the plan has been completed"""
     today = date.today()
-    plan_end = plan_start + timedelta(weeks=plan_duration_weeks)
+    plan_end = plan_start + datetime.timedelta(weeks=plan_duration_weeks)
     
     if today < plan_start:
         return 0.0
@@ -249,3 +251,211 @@ def validate_profile_data(profile_data: Dict[str, Any]) -> List[str]:
         errors.append("Training days must be between 3 and 6")
     
     return errors
+            "name": "Push-ups",
+            "equipment": ["bodyweight"],
+            "difficulty": "beginner",
+            "substitutions": ["Incline Push-ups", "Knee Push-ups"],
+            "notes": "Great foundation exercise",
+            "safety_notes": "Keep core tight, full range of motion"
+        },
+        {
+            "name": "Dumbbell Bench Press",
+            "equipment": ["dumbbells", "bench"],
+            "difficulty": "beginner",
+            "substitutions": ["Barbell Bench Press", "Machine Press"],
+            "notes": "Control the weight on the way down"
+        },
+        {
+            "name": "Incline Dumbbell Press",
+            "equipment": ["dumbbells", "incline_bench"],
+            "difficulty": "intermediate",
+            "substitutions": ["Incline Barbell Press", "Push-ups"],
+            "notes": "Targets upper chest"
+        },
+        {
+            "name": "Dips",
+            "equipment": ["dip_bars"],
+            "difficulty": "intermediate",
+            "substitutions": ["Tricep Dips", "Close-grip Push-ups"],
+            "notes": "Lean forward for chest emphasis"
+        },
+        {
+            "name": "Chest Flyes",
+            "equipment": ["dumbbells", "bench"],
+            "difficulty": "intermediate",
+            "substitutions": ["Cable Flyes", "Pec Deck"],
+            "notes": "Focus on squeeze at the top"
+        }
+    ],
+    "back": [
+        {
+            "name": "Pull-ups",
+            "equipment": ["pull_up_bar"],
+            "difficulty": "intermediate",
+            "substitutions": ["Lat Pulldown", "Assisted Pull-ups"],
+            "notes": "Full range of motion, control the descent"
+        },
+        {
+            "name": "Bent-over Rows",
+            "equipment": ["barbell"],
+            "difficulty": "intermediate",
+            "substitutions": ["Dumbbell Rows", "Cable Rows"],
+            "notes": "Keep back straight, pull to lower chest"
+        },
+        {
+            "name": "Lat Pulldown",
+            "equipment": ["cable_machine"],
+            "difficulty": "beginner",
+            "substitutions": ["Pull-ups", "Resistance Band Pulldowns"],
+            "notes": "Pull to upper chest, squeeze shoulder blades"
+        },
+        {
+            "name": "Deadlifts",
+            "equipment": ["barbell"],
+            "difficulty": "advanced",
+            "substitutions": ["Romanian Deadlifts", "Trap Bar Deadlifts"],
+            "notes": "Keep bar close to body, drive through heels",
+            "safety_notes": "Master form before adding weight"
+        },
+        {
+            "name": "Single-arm Dumbbell Row",
+            "equipment": ["dumbbell", "bench"],
+            "difficulty": "beginner",
+            "substitutions": ["Cable Rows", "Resistance Band Rows"],
+            "notes": "Support yourself with opposite arm"
+        }
+    ],
+    "shoulders": [
+        {
+            "name": "Overhead Press",
+            "equipment": ["dumbbells"],
+            "difficulty": "beginner",
+            "substitutions": ["Military Press", "Machine Press"],
+            "notes": "Press straight up, keep core tight"
+        },
+        {
+            "name": "Lateral Raises",
+            "equipment": ["dumbbells"],
+            "difficulty": "beginner",
+            "substitutions": ["Cable Lateral Raises", "Resistance Band Raises"],
+            "notes": "Control the weight, slight bend in elbows"
+        },
+        {
+            "name": "Face Pulls",
+            "equipment": ["cable_machine"],
+            "difficulty": "beginner",
+            "substitutions": ["Resistance Band Face Pulls", "Reverse Flyes"],
+            "notes": "Great for rear delts and posture"
+        },
+        {
+            "name": "Pike Push-ups",
+            "equipment": ["bodyweight"],
+            "difficulty": "intermediate",
+            "substitutions": ["Handstand Push-ups", "Overhead Press"],
+            "notes": "Feet elevated, press up and back"
+        },
+        {
+            "name": "Arnold Press",
+            "equipment": ["dumbbells"],
+            "difficulty": "intermediate",
+            "substitutions": ["Regular Shoulder Press", "Machine Press"],
+            "notes": "Rotate palms during the movement"
+        }
+    ],
+    "triceps": [
+        {
+            "name": "Tricep Dips",
+            "equipment": ["bodyweight", "bench"],
+            "difficulty": "beginner",
+            "substitutions": ["Assisted Dips", "Close-grip Push-ups"],
+            "notes": "Keep elbows close to body"
+        },
+        {
+            "name": "Close-grip Push-ups",
+            "equipment": ["bodyweight"],
+            "difficulty": "beginner",
+            "substitutions": ["Diamond Push-ups", "Tricep Dips"],
+            "notes": "Hands in diamond shape"
+        },
+        {
+            "name": "Overhead Tricep Extension",
+            "equipment": ["dumbbell"],
+            "difficulty": "beginner",
+            "substitutions": ["Cable Tricep Extension", "Tricep Dips"],
+            "notes": "Keep elbows stationary"
+        },
+        {
+            "name": "Tricep Pushdowns",
+            "equipment": ["cable_machine"],
+            "difficulty": "beginner",
+            "substitutions": ["Overhead Extension", "Close-grip Push-ups"],
+            "notes": "Keep elbows at sides"
+        }
+    ],
+    "biceps": [
+        {
+            "name": "Bicep Curls",
+            "equipment": ["dumbbells"],
+            "difficulty": "beginner",
+            "substitutions": ["Barbell Curls", "Cable Curls"],
+            "notes": "Control the weight on the way down"
+        },
+        {
+            "name": "Hammer Curls",
+            "equipment": ["dumbbells"],
+            "difficulty": "beginner",
+            "substitutions": ["Cable Hammer Curls", "Resistance Band Curls"],
+            "notes": "Neutral grip, targets brachialis"
+        },
+        {
+            "name": "Chin-ups",
+            "equipment": ["pull_up_bar"],
+            "difficulty": "intermediate",
+            "substitutions": ["Assisted Chin-ups", "Cable Curls"],
+            "notes": "Underhand grip, pull chest to bar"
+        },
+        {
+            "name": "21s",
+            "equipment": ["barbell"],
+            "difficulty": "intermediate",
+            "substitutions": ["Regular Curls", "Cable Curls"],
+            "notes": "7 bottom half, 7 top half, 7 full reps"
+        }
+    ],
+    "legs": [
+        {
+            "name": "Bodyweight Squats",
+            "equipment": ["bodyweight"],
+            "difficulty": "beginner",
+            "substitutions": ["Goblet Squats", "Wall Sits"],
+            "notes": "Keep knees in line with toes"
+        },
+        {
+            "name": "Goblet Squats",
+            "equipment": ["dumbbell"],
+            "difficulty": "beginner",
+            "substitutions": ["Bodyweight Squats", "Front Squats"],
+            "notes": "Hold weight at chest level"
+        },
+        {
+            "name": "Lunges",
+            "equipment": ["bodyweight"],
+            "difficulty": "beginner",
+            "substitutions": ["Reverse Lunges", "Step-ups"],
+            "notes": "Step forward, drop back knee down"
+        },
+        {
+            "name": "Romanian Deadlifts",
+            "equipment": ["dumbbells"],
+            "difficulty": "intermediate",
+            "substitutions": ["Good Mornings", "Hip Hinges"],
+            "notes": "Hinge at hips, feel stretch in hamstrings"
+        },
+        {
+            "name": "Bulgarian Split Squats",
+            "equipment": ["bodyweight", "bench"],
+            "difficulty": "intermediate",
+            "substitutions": ["Reverse Lunges", "Single-leg Squats"],
+            "notes": "Rear foot elevated, most weight on front leg"
+        },
+        {
