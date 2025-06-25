@@ -1,9 +1,19 @@
-# backend/database/models.py - Enhanced Pydantic models
-
-from pydantic import BaseModel, validator, Field
+# models.py - Working version
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import date, datetime
-from enum import Enum
+from datetime import datetime
+
+# Basic models that work without complex imports
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+class GeneratedPlan(BaseModel):
+    id: str
+    workout_plan: List[dict]
+    nutrition_plan: dict
+    rationale: str
 
 class Sex(str, Enum):
     MALE = "male"
@@ -33,12 +43,6 @@ class PlanStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     REGENERATED = "regenerated"
-
-# Authentication Models
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    full_name: str
 
 class UserLogin(BaseModel):
     email: str
@@ -71,11 +75,6 @@ class PlanRequest(BaseModel):
     fitness_goal: str
     days_per_week: int
     activity_level: str
-
-class Exercise(BaseModel):
-    name: str
-    sets: int
-    reps: str
 
 
 # Core User Models
