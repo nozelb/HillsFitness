@@ -1,40 +1,115 @@
-from database.database import EnhancedGymDatabase
-from models import (
-    UserCreate, UserLogin, UserResponse, UserData, 
-    ImageAnalysisResult, PlanRequest, GeneratedPlan,
-    ProgressEntry, WorkoutLog, WeightEntry, BodyMeasurements,
-    DashboardResponse, DashboardStats, TodaysFocus
-)
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
-from database.database import EnhancedGymDatabase
-from api.profile import router as profile_router
-from api.plans import router as plans_router
-from api.dashboard import router as dashboard_router
-from api.notifications import router as notifications_router
-import os
-import json
-import uuid
+from typing import Optional, List
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Optional, List
+import os
+import json
+import uuid
 import aiofiles
 from PIL import Image
 import io
 from pydantic import ValidationError
 
-from models import (
-    UserCreate, UserLogin, UserResponse, UserData, 
-    ImageAnalysisResult, PlanRequest, GeneratedPlan,
-    ProgressEntry, WorkoutLog, WeightEntry, BodyMeasurements,
-    DashboardResponse, DashboardStats, TodaysFocus
-)
+# Import from local modules
+from database.database import EnhancedGymDatabase
 from image_utils import analyze_physique_from_image
 from plan_engine import generate_workout_plan
 from nutrition_engine import generate_nutrition_plan
+
+# Create Pydantic models here since models.py is causing issues
+from pydantic import BaseModel
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    access_token: str
+    token_type: str
+
+class UserData(BaseModel):
+    weight: float
+    height: float
+    age: int
+    sex: str
+    smart_scale: Optional[dict] = None
+
+class ImageAnalysisResult(BaseModel):
+    waist_cm: float
+    hip_cm: float
+    shoulder_cm: float
+    body_fat_estimate: float
+    confidence_score: float
+
+class PlanRequest(BaseModel):
+    fitness_goal: str
+    days_per_week: int
+    activity_level: str
+
+class GeneratedPlan(BaseModel):
+    id: str
+    workout_plan: List[dict]
+    nutrition_plan: dict
+    rationale: str
+
+class ProgressEntry(BaseModel):
+    energy_level: Optional[int] = None
+    mood: Optional[int] = None
+    sleep_hours: Optional[float] = None
+    weight_kg: Optional[float] = None
+    notes: Optional[str] = None
+
+class WorkoutLog(BaseModel):
+    workout_name: str
+    duration_minutes: int
+    exercises_completed: List[str]
+    notes: Optional[str] = None
+
+class WeightEntry(BaseModel):
+    weight: float
+    body_fat_percentage: Optional[float] = None
+    timestamp: Optional[datetime] = None
+
+class BodyMeasurements(BaseModel):
+    chest_cm: Optional[float] = None
+    waist_cm: Optional[float] = None
+    hips_cm: Optional[float] = None
+    bicep_cm: Optional[float] = None
+    thigh_cm: Optional[float] = None
+
+class DashboardStats(BaseModel):
+    current_weight: Optional[float] = None
+    weight_change_7d: Optional[float] = None
+    weight_change_30d: Optional[float] = None
+    workouts_this_week: int = 0
+    total_workout_time_week: int = 0
+    current_streak: int = 0
+    next_workout: Optional[dict] = None
+
+class TodaysFocus(BaseModel):
+    workout_scheduled: Optional[dict] = None
+    nutrition_targets: Optional[dict] = None
+    progress_logged: bool = False
+    motivational_message: str = ""
+
+class DashboardResponse(BaseModel):
+    stats: DashboardStats
+    todays_focus: TodaysFocus
+    recent_progress: List[dict]
+    weight_trend: List[dict]
+    workout_frequency: List[dict]
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -621,7 +696,3 @@ async def get_workout_history(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-app.include_router(profile_router)
-app.include_router(plans_router)
-app.include_router(dashboard_router)
-app.include_router(notifications_router)

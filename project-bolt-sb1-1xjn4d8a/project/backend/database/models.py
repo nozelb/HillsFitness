@@ -5,7 +5,6 @@ from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from enum import Enum
 
-# Enums for consistent choices
 class Sex(str, Enum):
     MALE = "male"
     FEMALE = "female"
@@ -34,6 +33,50 @@ class PlanStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     REGENERATED = "regenerated"
+
+# Authentication Models
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    access_token: str
+    token_type: str
+
+# User Data Models
+class UserData(BaseModel):
+    weight: float
+    height: float
+    age: int
+    sex: str
+    smart_scale: Optional[dict] = None
+
+class ImageAnalysisResult(BaseModel):
+    waist_cm: float
+    hip_cm: float
+    shoulder_cm: float
+    body_fat_estimate: float
+    confidence_score: float
+
+# Plan Generation Models
+class PlanRequest(BaseModel):
+    fitness_goal: str
+    days_per_week: int
+    activity_level: str
+
+class Exercise(BaseModel):
+    name: str
+    sets: int
+    reps: str
+
 
 # Core User Models
 class UserProfile(BaseModel):

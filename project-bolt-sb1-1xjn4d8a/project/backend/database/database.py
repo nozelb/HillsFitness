@@ -474,6 +474,8 @@ class EnhancedGymDatabase:
             })
         return weeks
     
+# Fix for backend/database/database.py - _calculate_streak method
+
     def _calculate_streak(self, user_id: str) -> int:
         """Calculate current streak of consistent progress logging"""
         progress = self.get_progress_history(user_id, days=30)
@@ -490,8 +492,8 @@ class EnhancedGymDatabase:
             # Check if there's a progress entry for this date
             day_entries = [
                 p for p in progress 
-                if p.recorded_at.date() == check_date if hasattr(p.recorded_at, 'date') 
-                else datetime.fromisoformat(str(p.recorded_at)).date() == check_date
+                if (hasattr(p.recorded_at, 'date') and p.recorded_at.date() == check_date) or
+                (not hasattr(p.recorded_at, 'date') and datetime.fromisoformat(str(p.recorded_at)).date() == check_date)
             ]
             
             if day_entries:
