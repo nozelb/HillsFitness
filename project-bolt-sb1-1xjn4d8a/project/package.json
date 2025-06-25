@@ -13,7 +13,12 @@
     "lucide-react": "^0.396.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.8.0"
+    "recharts": "^2.8.0",
+    "react-hook-form": "^7.45.0",
+    "react-query": "^3.39.0",
+    "date-fns": "^2.30.0",
+    "react-pdf": "^7.3.0",
+    "react-hot-toast": "^2.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^8.57.0",
@@ -30,13 +35,5 @@
     "typescript": "^5.5.2",
     "typescript-eslint": "^7.14.1",
     "vite": "^5.3.1"
-  }
-  {
-    "recharts": "^2.8.0",           // Charts
-    "react-hook-form": "^7.45.0",   // Form management
-    "react-query": "^3.39.0",       // Data fetching
-    "date-fns": "^2.30.0",          // Date utilities
-    "react-pdf": "^7.3.0",          // PDF viewer
-    "react-hot-toast": "^2.4.0"     // Notifications
   }
 }

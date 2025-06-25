@@ -1,3 +1,10 @@
+from database.database import EnhancedGymDatabase
+from models import (
+    UserCreate, UserLogin, UserResponse, UserData, 
+    ImageAnalysisResult, PlanRequest, GeneratedPlan,
+    ProgressEntry, WorkoutLog, WeightEntry, BodyMeasurements,
+    DashboardResponse, DashboardStats, TodaysFocus
+)
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -28,7 +35,6 @@ from models import (
 from image_utils import analyze_physique_from_image
 from plan_engine import generate_workout_plan
 from nutrition_engine import generate_nutrition_plan
-from database import Database
 
 # Initialize FastAPI app
 app = FastAPI(
