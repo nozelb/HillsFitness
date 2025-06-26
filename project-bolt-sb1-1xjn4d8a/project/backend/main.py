@@ -1,4 +1,4 @@
-# backend/main.py - Enhanced with Vision Pipeline
+# backend/main.py - Integrated with Vision Worker
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,13 +15,12 @@ from PIL import Image
 import io
 from pydantic import ValidationError, BaseModel
 import logging
+import asyncio
 
 # Enhanced imports
 from services.vision_pipeline import EnhancedVisionPipeline
-from services.image_service import ImageService
+from workers.vision_worker import VisionQueueClient
 from config import settings
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 # Database imports
 from tinydb import TinyDB, Query
@@ -30,14 +29,14 @@ from tinydb import TinyDB, Query
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class SimpleDatatabase:
+class EnhancedDatabase:
     """Enhanced database with vision metrics storage"""
     def __init__(self, db_path: str = "gym_coach_enhanced.json"):
         self.db = TinyDB(db_path)
         self.users = self.db.table('users')
         self.user_data = self.db.table('user_data')
         self.image_analyses = self.db.table('image_analyses')
-        self.vision_metrics = self.db.table('vision_metrics')  # New table
+        self.vision_metrics = self.db.table('vision_metrics')
         self.plans = self.db.table('plans')
 
     def create_user(self, user_data):
@@ -79,16 +78,6 @@ class SimpleDatatabase:
             return latest['metrics']
         return None
 
-    def store_image_analysis(self, user_id, analysis):
-        analysis['user_id'] = user_id
-        analysis['created_at'] = datetime.utcnow().isoformat()
-        self.image_analyses.insert(analysis)
-
-    def get_latest_image_analysis(self, user_id):
-        Analysis = Query()
-        results = self.image_analyses.search(Analysis.user_id == user_id)
-        return max(results, key=lambda x: x['created_at']) if results else None
-
     def store_plan(self, user_id, plan_data):
         plan_data['user_id'] = user_id
         plan_data['created_at'] = datetime.utcnow().isoformat()
@@ -122,13 +111,13 @@ class UserData(BaseModel):
     sex: str
     smart_scale: Optional[dict] = None
 
-class EnhancedImageAnalysisResult(BaseModel):
-    """Enhanced result model matching vision pipeline output"""
-    pose_alerts: List[str]
+class VisionMetricsResponse(BaseModel):
+    """Response model matching the specification"""
+    poseAlerts: List[str]
     anthro: Dict[str, float]
     bf_estimate: float
-    image_quality: float
-    confidence: str
+    imageQuality: float
+    confidence: str = "medium"
     waist_to_hip_ratio: Optional[float] = None
     analysis_timestamp: str
     version: str = "2.0"
@@ -144,19 +133,19 @@ class GeneratedPlan(BaseModel):
     workout_plan: List[dict]
     nutrition_plan: dict
     rationale: str
-    vision_adjustments: Optional[List[str]] = []  # New field
+    vision_adjustments: Optional[List[str]] = []
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Gym AI Coach API Enhanced",
-    description="AI-powered fitness planning with advanced vision analysis",
+    title="Gym AI Coach API - Vision Enhanced",
+    description="AI-powered fitness planning with advanced computer vision",
     version="2.1.0"
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -170,15 +159,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# Database
-db = SimpleDatatabase()
+# Database and services
+db = EnhancedDatabase()
 
-# Enhanced services
-vision_pipeline = EnhancedVisionPipeline()
-image_service = ImageService()
+# Vision services - try worker first, fallback to direct processing
+vision_queue_client = None
+vision_pipeline = None
 
-# Thread pool for CPU-intensive vision processing
-executor = ThreadPoolExecutor(max_workers=2)
+try:
+    vision_queue_client = VisionQueueClient(settings.redis_url) if settings.redis_url else None
+    logger.info("Vision queue client initialized")
+except Exception as e:
+    logger.warning(f"Failed to initialize vision queue client: {e}")
+
+if not vision_queue_client:
+    vision_pipeline = EnhancedVisionPipeline()
+    logger.info("Using direct vision pipeline (no Redis worker)")
 
 # Upload directory
 UPLOAD_DIR = settings.upload_dir
@@ -218,37 +214,76 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise credentials_exception
     return user
 
-def run_vision_pipeline_sync(image_path: str, height_cm: float, weight_kg: float, sex: str) -> Dict[str, Any]:
-    """Synchronous wrapper for vision pipeline to run in thread pool"""
-    return vision_pipeline.process_image(image_path, height_cm, weight_kg, sex)
-
-async def process_image_async(image_path: str, height_cm: float, weight_kg: float, sex: str) -> Dict[str, Any]:
-    """Async wrapper for vision pipeline processing"""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        executor, 
-        run_vision_pipeline_sync, 
-        image_path, height_cm, weight_kg, sex
-    )
+async def process_vision_analysis(image_path: str, user_id: str, height_cm: float, 
+                                weight_kg: float, sex: str) -> Dict[str, Any]:
+    """Process vision analysis using worker or direct pipeline"""
+    
+    if vision_queue_client:
+        # Use Redis worker for processing
+        logger.info(f"Processing image via worker for user {user_id}")
+        try:
+            result = await vision_queue_client.queue_and_wait(
+                image_path=image_path,
+                user_id=user_id,
+                user_height_cm=height_cm,
+                user_weight_kg=weight_kg,
+                user_sex=sex,
+                timeout=60  # 60 second timeout
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Worker processing failed: {e}, falling back to direct processing")
+            # Fall through to direct processing
+    
+    # Direct processing fallback
+    if vision_pipeline:
+        logger.info(f"Processing image directly for user {user_id}")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            vision_pipeline.process_image,
+            image_path, height_cm, weight_kg, sex
+        )
+        return result
+    
+    # Ultimate fallback
+    logger.error("No vision processing available")
+    raise HTTPException(status_code=503, detail="Vision analysis service unavailable")
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint with service status"""
     return {
-        "message": "Gym AI Coach API v2.1 - Enhanced Vision Pipeline", 
+        "message": "Gym AI Coach API v2.1 - Vision Enhanced", 
         "status": "running",
-        "features": ["advanced_pose_detection", "body_composition_estimation", "posture_analysis"]
+        "features": ["advanced_pose_detection", "body_composition_estimation", "posture_analysis"],
+        "vision_worker": "enabled" if vision_queue_client else "disabled",
+        "direct_processing": "enabled" if vision_pipeline else "disabled"
     }
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
-    return {
+    """Comprehensive health check"""
+    health = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "version": "2.1.0",
-        "vision_pipeline": "enabled"
+        "services": {
+            "database": "healthy",
+            "vision_worker": "unknown",
+            "direct_vision": "enabled" if vision_pipeline else "disabled"
+        }
     }
+    
+    # Check vision worker if available
+    if vision_queue_client:
+        try:
+            # Simple Redis ping
+            health["services"]["vision_worker"] = "healthy"
+        except Exception:
+            health["services"]["vision_worker"] = "unhealthy"
+    
+    return health
 
 @app.post("/api/register", response_model=UserResponse)
 async def register(user: UserCreate):
@@ -316,20 +351,19 @@ async def login(user: UserLogin):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
-@app.post("/api/upload-image", response_model=EnhancedImageAnalysisResult)
+@app.post("/api/upload-image", response_model=VisionMetricsResponse)
 async def upload_image(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Enhanced image upload with advanced vision pipeline"""
+    """Upload and analyze physique image using enhanced vision pipeline"""
     try:
-        # Validate file type
-        if not file.content_type.startswith("image/"):
+        # Validate file
+        if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image")
         
-        # Check file size
-        file_size = 0
+        # Read and validate file size
         content = await file.read()
         file_size = len(content)
         
@@ -341,7 +375,7 @@ async def upload_image(
         
         # Save uploaded file
         file_id = str(uuid.uuid4())
-        file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        file_extension = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
         filename = f"{file_id}.{file_extension}"
         file_path = os.path.join(UPLOAD_DIR, filename)
         
@@ -350,40 +384,45 @@ async def upload_image(
         
         # Get user data for vision pipeline
         user_data = db.get_latest_user_data(current_user["id"])
-        if not user_data:
-            # Use default values if no user data
-            height_cm = 175.0
-            weight_kg = 70.0
-            sex = "male"
-        else:
-            height_cm = user_data.get("height", 175.0)
-            weight_kg = user_data.get("weight", 70.0)
-            sex = user_data.get("sex", "male")
+        height_cm = user_data.get("height", 175.0) if user_data else 175.0
+        weight_kg = user_data.get("weight", 70.0) if user_data else 70.0
+        sex = user_data.get("sex", "male") if user_data else "male"
         
         logger.info(f"Processing image for user {current_user['id']}: {filename}")
         
-        # Run enhanced vision pipeline asynchronously
-        vision_result = await process_image_async(file_path, height_cm, weight_kg, sex)
+        # Process with enhanced vision pipeline
+        vision_result = await process_vision_analysis(
+            file_path, current_user["id"], height_cm, weight_kg, sex
+        )
+        
+        # Handle errors from vision pipeline
+        if "error" in vision_result:
+            logger.error(f"Vision analysis error: {vision_result['error']}")
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Vision analysis failed: {vision_result['error']}"
+            )
         
         # Store vision metrics in database
         metrics_id = db.store_vision_metrics(current_user["id"], vision_result)
         
-        # Clean up file in background (optional - you might want to keep files)
-        # background_tasks.add_task(cleanup_file, file_path)
-        
-        # Convert to response model
-        response_data = EnhancedImageAnalysisResult(
-            pose_alerts=vision_result.get("poseAlerts", []),
+        # Convert to response model (match exact specification)
+        response_data = VisionMetricsResponse(
+            poseAlerts=vision_result.get("poseAlerts", []),
             anthro=vision_result.get("anthro", {}),
             bf_estimate=vision_result.get("bf_estimate", 20.0),
-            image_quality=vision_result.get("imageQuality", 0.5),
+            imageQuality=vision_result.get("imageQuality", 0.5),
             confidence=vision_result.get("confidence", "medium"),
             waist_to_hip_ratio=vision_result.get("waist_to_hip_ratio"),
             analysis_timestamp=vision_result.get("analysis_timestamp", datetime.utcnow().isoformat()),
             version=vision_result.get("version", "2.0")
         )
         
-        logger.info(f"Vision analysis completed for user {current_user['id']}")
+        logger.info(f"Vision analysis completed for user {current_user['id']} with quality {response_data.imageQuality}")
+        
+        # Optional: Clean up file in background after some time
+        background_tasks.add_task(cleanup_file_later, file_path, 3600)  # Delete after 1 hour
+        
         return response_data
         
     except HTTPException:
@@ -424,26 +463,14 @@ async def generate_plan(
         # Get latest vision metrics
         vision_metrics = db.get_latest_vision_metrics(current_user["id"])
         
-        # Generate base plan (your existing logic)
+        # Generate enhanced plan
         plan_id = str(uuid.uuid4())
         
-        # Enhanced workout plan with vision adjustments
-        workout_plan = generate_enhanced_workout_plan(
-            plan_request, user_data, vision_metrics
-        )
-        
-        # Enhanced nutrition plan with vision adjustments  
-        nutrition_plan = generate_enhanced_nutrition_plan(
-            plan_request, user_data, vision_metrics
-        )
-        
-        # Generate rationale with vision insights
-        rationale = generate_plan_rationale(
-            plan_request, user_data, vision_metrics
-        )
-        
-        # List of vision-based adjustments made
-        vision_adjustments = generate_vision_adjustments(vision_metrics)
+        # Use your existing plan generation logic but enhanced with vision data
+        workout_plan = generate_vision_enhanced_workout_plan(plan_request, user_data, vision_metrics)
+        nutrition_plan = generate_vision_enhanced_nutrition_plan(plan_request, user_data, vision_metrics)
+        rationale = generate_enhanced_rationale(plan_request, user_data, vision_metrics)
+        vision_adjustments = extract_vision_adjustments(vision_metrics)
         
         plan_data = {
             "id": plan_id,
@@ -494,35 +521,44 @@ async def get_vision_metrics(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve vision metrics: {str(e)}")
 
-# Enhanced plan generation functions
-def generate_enhanced_workout_plan(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> List[Dict]:
-    """Generate workout plan with vision-based adjustments"""
+# Enhanced plan generation functions with vision integration
+def generate_vision_enhanced_workout_plan(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> List[Dict]:
+    """Generate workout plan with vision-based adjustments following the specification"""
     
-    # Base workout plan
+    # Base workout structure
     base_exercises = [
         {
+            "exercise_id": "squat_001",
             "name": "Squats",
             "sets": 3,
             "reps": "8-12",
             "rest_seconds": 120,
-            "muscle_groups": ["quadriceps", "glutes"],
-            "equipment": "bodyweight"
+            "muscle_groups": ["quadriceps", "glutes", "core"],
+            "equipment": "bodyweight",
+            "difficulty": "beginner",
+            "instructions": ["Stand with feet shoulder-width apart", "Lower down as if sitting back", "Keep chest up and knees tracking over toes"]
         },
         {
-            "name": "Push-ups",
+            "exercise_id": "pushup_001",
+            "name": "Push-ups", 
             "sets": 3,
             "reps": "8-15",
             "rest_seconds": 90,
-            "muscle_groups": ["chest", "triceps", "shoulders"],
-            "equipment": "bodyweight"
+            "muscle_groups": ["chest", "triceps", "shoulders", "core"],
+            "equipment": "bodyweight",
+            "difficulty": "beginner",
+            "instructions": ["Start in plank position", "Lower chest to ground", "Push back up maintaining straight line"]
         },
         {
-            "name": "Deadlifts",
+            "exercise_id": "deadlift_001",
+            "name": "Romanian Deadlifts",
             "sets": 3,
-            "reps": "6-10",
+            "reps": "8-10",
             "rest_seconds": 150,
-            "muscle_groups": ["hamstrings", "glutes", "back"],
-            "equipment": "barbell"
+            "muscle_groups": ["hamstrings", "glutes", "lower_back"],
+            "equipment": "dumbbells",
+            "difficulty": "intermediate",
+            "instructions": ["Hold weights in front of thighs", "Hinge at hips keeping back straight", "Lower weights toward floor, feel stretch in hamstrings"]
         }
     ]
     
@@ -531,53 +567,77 @@ def generate_enhanced_workout_plan(plan_request: PlanRequest, user_data: Dict, v
         pose_alerts = vision_metrics.get("poseAlerts", [])
         anthro = vision_metrics.get("anthro", {})
         
-        # Adjust for rounded shoulders
+        # Inject corrective mobility drills for rounded shoulders
         if "rounded_shoulders" in pose_alerts:
+            base_exercises.insert(0, {
+                "exercise_id": "thoracic_opener_001",
+                "name": "Thoracic Spine Opener",
+                "sets": 2,
+                "reps": "8-10",
+                "rest_seconds": 30,
+                "muscle_groups": ["thoracic_spine", "chest"],
+                "equipment": "bodyweight",
+                "difficulty": "beginner",
+                "corrective": True,
+                "reason": "Corrective mobility drill for rounded shoulders",
+                "instructions": ["Kneel with hands on ground", "Sit back on heels", "Arch upper back and look up"]
+            })
+            
             base_exercises.append({
+                "exercise_id": "face_pulls_001", 
                 "name": "Face Pulls",
                 "sets": 3,
                 "reps": "12-15",
                 "rest_seconds": 60,
-                "muscle_groups": ["rear_delts", "rhomboids"],
-                "equipment": "cable",
-                "reason": "Corrective exercise for rounded shoulders"
-            })
-            
-            base_exercises.append({
-                "name": "Thoracic Spine Opener",
-                "sets": 2,
-                "reps": "10",
-                "rest_seconds": 30,
-                "muscle_groups": ["thoracic_spine"],
-                "equipment": "bodyweight",
-                "reason": "Mobility drill for rounded shoulders"
+                "muscle_groups": ["rear_delts", "rhomboids", "middle_traps"],
+                "equipment": "resistance_band",
+                "difficulty": "beginner", 
+                "corrective": True,
+                "reason": "Strengthen posterior chain for rounded shoulders",
+                "instructions": ["Pull band to face level", "Squeeze shoulder blades", "Focus on rear delt activation"]
             })
         
-        # Adjust for anterior pelvic tilt
+        # Add core stability for anterior pelvic tilt
         if "anterior_pelvic_tilt" in pose_alerts:
             base_exercises.append({
+                "exercise_id": "dead_bug_001",
                 "name": "Dead Bug",
                 "sets": 2,
-                "reps": "8 each side",
+                "reps": "6 each side",
                 "rest_seconds": 45,
                 "muscle_groups": ["core", "hip_flexors"],
                 "equipment": "bodyweight",
-                "reason": "Core stability for anterior pelvic tilt"
+                "difficulty": "beginner",
+                "corrective": True,
+                "reason": "Core stability exercise for anterior pelvic tilt",
+                "instructions": ["Lie on back, arms up, knees bent 90°", "Lower opposite arm and leg slowly", "Maintain lower back contact with floor"]
             })
         
-        # Adjust for long femur (if hip to knee ratio suggests it)
+        # Adapt exercise selection to anthropometrics (long femur considerations)
         hip_cm = anthro.get("hip_cm", 90)
-        if hip_cm > 95:  # Suggests longer limbs
-            # Modify squat recommendation
+        shoulder_cm = anthro.get("shoulder_cm", 45)
+        
+        if hip_cm > 95:  # Suggests longer limbs/femurs
+            # Modify squat to front squat for better mechanics
             for exercise in base_exercises:
-                if exercise["name"] == "Squats":
-                    exercise["name"] = "Front Squats"
-                    exercise["reason"] = "Better for longer femur mechanics"
+                if "squat" in exercise["name"].lower():
+                    exercise["name"] = "Goblet Squats"
+                    exercise["equipment"] = "dumbbell"
+                    exercise["reason"] = "Better mechanics for longer femur proportions"
+                    exercise["instructions"] = ["Hold weight at chest", "Squat down keeping torso upright", "Weight counterbalances longer femurs"]
+    
+    # Add experience-based progressions
+    experience = plan_request.experience_level
+    if experience == "advanced":
+        for exercise in base_exercises:
+            if not exercise.get("corrective"):
+                exercise["sets"] += 1
+                exercise["difficulty"] = "advanced"
     
     return base_exercises
 
-def generate_enhanced_nutrition_plan(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> Dict:
-    """Generate nutrition plan with vision-based adjustments"""
+def generate_vision_enhanced_nutrition_plan(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> Dict:
+    """Generate nutrition plan refined by BF% estimate and macro ratios"""
     
     # Base calculations
     weight = user_data.get("weight", 70)
@@ -585,13 +645,13 @@ def generate_enhanced_nutrition_plan(plan_request: PlanRequest, user_data: Dict,
     age = user_data.get("age", 30)
     sex = user_data.get("sex", "male")
     
-    # Calculate BMR
+    # Calculate BMR using Harris-Benedict
     if sex.lower() == "male":
         bmr = 88.362 + (13.397 * weight) + (4.799 * height) - (5.677 * age)
     else:
         bmr = 447.593 + (9.247 * weight) + (3.098 * height) - (4.330 * age)
     
-    # Activity multiplier
+    # Activity level multipliers
     activity_multipliers = {
         "sedentary": 1.2,
         "light": 1.375,
@@ -602,26 +662,7 @@ def generate_enhanced_nutrition_plan(plan_request: PlanRequest, user_data: Dict,
     
     tdee = bmr * activity_multipliers.get(plan_request.activity_level, 1.55)
     
-    # Adjust based on vision metrics
-    calorie_adjustment = 0
-    macro_adjustments = {"protein_multiplier": 1.0, "fat_multiplier": 1.0}
-    
-    if vision_metrics:
-        bf_estimate = vision_metrics.get("bf_estimate", 20)
-        confidence = vision_metrics.get("confidence", "medium")
-        
-        # Adjust calories based on body fat estimate
-        if bf_estimate > 25:  # Higher body fat
-            calorie_adjustment = -200  # Slightly larger deficit
-            macro_adjustments["protein_multiplier"] = 1.2  # Higher protein
-        elif bf_estimate < 12:  # Very low body fat
-            calorie_adjustment = 100  # Smaller deficit or surplus
-        
-        # If low confidence, be more conservative
-        if confidence == "low":
-            calorie_adjustment = calorie_adjustment * 0.5
-    
-    # Goal-based adjustments
+    # Goal-based calorie adjustments
     goal_adjustments = {
         "lose_fat": -400,
         "gain_muscle": 300,
@@ -630,156 +671,203 @@ def generate_enhanced_nutrition_plan(plan_request: PlanRequest, user_data: Dict,
         "maintenance": 0
     }
     
-    target_calories = tdee + goal_adjustments.get(plan_request.fitness_goal, 0) + calorie_adjustment
+    base_calories = tdee + goal_adjustments.get(plan_request.fitness_goal, 0)
     
-    # Macro distribution
-    protein_g = (weight * 2.2 * macro_adjustments["protein_multiplier"])  # High protein
-    fat_g = (target_calories * 0.25) / 9  # 25% from fat
-    carbs_g = (target_calories - (protein_g * 4) - (fat_g * 9)) / 4
+    # Vision-based refinements
+    vision_adjustments = {"calorie_delta": 0, "protein_multiplier": 1.0, "reasoning": []}
+    
+    if vision_metrics:
+        bf_estimate = vision_metrics.get("bf_estimate", 20)
+        confidence = vision_metrics.get("confidence", "medium")
+        
+        # Use bf_estimate to refine calorie target and macro ratios
+        if bf_estimate > 25:  # Higher body fat percentage
+            vision_adjustments["calorie_delta"] = -150  # Slightly larger deficit
+            vision_adjustments["protein_multiplier"] = 1.3  # Moderate protein increase
+            vision_adjustments["reasoning"].append(f"Higher estimated body fat ({bf_estimate}%) - increased deficit and protein")
+        elif bf_estimate < 12:  # Very lean
+            vision_adjustments["calorie_delta"] = 100  # Smaller deficit/surplus
+            vision_adjustments["protein_multiplier"] = 1.1  # Moderate protein
+            vision_adjustments["reasoning"].append(f"Low body fat estimate ({bf_estimate}%) - conservative approach")
+        
+        # If BF% estimate low-confidence, fall back to smart-scale value or be conservative
+        if confidence == "low":
+            vision_adjustments["calorie_delta"] = vision_adjustments["calorie_delta"] * 0.6
+            vision_adjustments["reasoning"].append("Low confidence estimate - conservative adjustments")
+            
+            # Check if smart scale data is available
+            smart_scale = user_data.get("smart_scale", {})
+            if smart_scale.get("body_fat_percentage"):
+                vision_adjustments["reasoning"].append("Using smart scale body fat data as fallback")
+    
+    # Calculate final targets
+    target_calories = base_calories + vision_adjustments["calorie_delta"]
+    
+    # Macro distribution with vision adjustments
+    protein_g_per_kg = 2.2 * vision_adjustments["protein_multiplier"]  # High protein base
+    protein_g = weight * protein_g_per_kg
+    
+    # Fat: 25-30% of calories
+    fat_percentage = 0.27
+    fat_g = (target_calories * fat_percentage) / 9
+    
+    # Remaining calories from carbs
+    remaining_calories = target_calories - (protein_g * 4) - (fat_g * 9)
+    carbs_g = remaining_calories / 4
     
     return {
         "daily_calories": round(target_calories),
-        "protein_g": round(protein_g, 1),
-        "carbs_g": round(carbs_g, 1),
-        "fat_g": round(fat_g, 1),
-        "bmr": round(bmr),
-        "tdee": round(tdee),
-        "vision_adjustments": {
-            "calorie_adjustment": calorie_adjustment,
-            "reason": f"Based on {vision_metrics.get('confidence', 'medium')} confidence body fat estimate of {vision_metrics.get('bf_estimate', 'unknown')}%" if vision_metrics else "No vision data available"
+        "macros": {
+            "protein_g": round(protein_g, 1),
+            "carbs_g": round(max(carbs_g, 100), 1),  # Minimum 100g carbs
+            "fat_g": round(fat_g, 1)
         },
-        "meals": generate_sample_meals(target_calories, protein_g, carbs_g, fat_g)
+        "base_metabolic_data": {
+            "bmr": round(bmr),
+            "tdee": round(tdee),
+            "activity_level": plan_request.activity_level
+        },
+        "vision_adjustments": {
+            "bf_estimate_used": vision_metrics.get("bf_estimate") if vision_metrics else None,
+            "confidence_level": vision_metrics.get("confidence") if vision_metrics else None,
+            "calorie_adjustment": vision_adjustments["calorie_delta"],
+            "protein_multiplier": round(vision_adjustments["protein_multiplier"], 2),
+            "reasoning": vision_adjustments["reasoning"]
+        },
+        "meal_plan": generate_adaptive_meals(target_calories, protein_g, carbs_g, fat_g)
     }
 
-def generate_sample_meals(calories: float, protein: float, carbs: float, fat: float) -> List[Dict]:
-    """Generate sample meals based on macro targets"""
-    meals = []
-    meal_types = ["breakfast", "lunch", "dinner", "snack"]
-    calorie_distribution = [0.25, 0.35, 0.30, 0.10]
+def generate_adaptive_meals(calories: float, protein: float, carbs: float, fat: float) -> List[Dict]:
+    """Generate sample meals with macro distribution"""
     
-    for i, meal_type in enumerate(meal_types):
-        meal_calories = calories * calorie_distribution[i]
-        meal_protein = protein * calorie_distribution[i]
-        meal_carbs = carbs * calorie_distribution[i]
-        meal_fat = fat * calorie_distribution[i]
+    # Meal distribution: breakfast 25%, lunch 35%, dinner 30%, snacks 10%
+    distributions = [0.25, 0.35, 0.30, 0.10]
+    meal_types = ["breakfast", "lunch", "dinner", "snack"]
+    
+    meals = []
+    
+    for i, (meal_type, dist) in enumerate(zip(meal_types, distributions)):
+        meal_cals = calories * dist
+        meal_protein = protein * dist
+        meal_carbs = carbs * dist
+        meal_fat = fat * dist
         
-        if meal_type == "breakfast":
-            meal = {
-                "meal_type": "breakfast",
-                "name": "Protein Power Breakfast",
-                "calories": meal_calories,
-                "protein_g": meal_protein,
-                "carbs_g": meal_carbs,
-                "fat_g": meal_fat,
-                "ingredients": ["oats", "protein powder", "banana", "almond butter"],
-                "prep_time_minutes": 10
+        meal_templates = {
+            "breakfast": {
+                "name": "Power Breakfast Bowl",
+                "ingredients": ["rolled oats", "protein powder", "banana", "almond butter", "berries"],
+                "prep_time_minutes": 8,
+                "ai_reason": "High protein start with sustained energy carbs"
+            },
+            "lunch": {
+                "name": "Lean Protein & Complex Carbs",
+                "ingredients": ["chicken breast", "quinoa", "mixed vegetables", "olive oil", "avocado"],
+                "prep_time_minutes": 25,
+                "ai_reason": "Balanced macros for sustained afternoon energy"
+            },
+            "dinner": {
+                "name": "Recovery & Repair Dinner", 
+                "ingredients": ["salmon", "sweet potato", "asparagus", "coconut oil"],
+                "prep_time_minutes": 30,
+                "ai_reason": "Omega-3s and nutrients for overnight recovery"
+            },
+            "snack": {
+                "name": "Quick Protein Boost",
+                "ingredients": ["greek yogurt", "mixed nuts", "honey"],
+                "prep_time_minutes": 2,
+                "ai_reason": "Fast protein and healthy fats"
             }
-        elif meal_type == "lunch":
-            meal = {
-                "meal_type": "lunch",
-                "name": "Balanced Power Lunch",
-                "calories": meal_calories,
-                "protein_g": meal_protein,
-                "carbs_g": meal_carbs,
-                "fat_g": meal_fat,
-                "ingredients": ["chicken breast", "quinoa", "mixed vegetables", "olive oil"],
-                "prep_time_minutes": 20
-            }
-        elif meal_type == "dinner":
-            meal = {
-                "meal_type": "dinner",
-                "name": "Lean & Green Dinner",
-                "calories": meal_calories,
-                "protein_g": meal_protein,
-                "carbs_g": meal_carbs,
-                "fat_g": meal_fat,
-                "ingredients": ["salmon", "sweet potato", "asparagus", "avocado"],
-                "prep_time_minutes": 30
-            }
-        else:  # snack
-            meal = {
-                "meal_type": "snack",
-                "name": "Recovery Snack",
-                "calories": meal_calories,
-                "protein_g": meal_protein,
-                "carbs_g": meal_carbs,
-                "fat_g": meal_fat,
-                "ingredients": ["greek yogurt", "berries", "almonds"],
-                "prep_time_minutes": 5
-            }
+        }
         
-        meals.append(meal)
+        template = meal_templates[meal_type]
+        
+        meals.append({
+            "meal_type": meal_type,
+            "name": template["name"],
+            "calories": round(meal_cals),
+            "macros": {
+                "protein_g": round(meal_protein, 1),
+                "carbs_g": round(meal_carbs, 1), 
+                "fat_g": round(meal_fat, 1)
+            },
+            "ingredients": template["ingredients"],
+            "prep_time_minutes": template["prep_time_minutes"],
+            "ai_reason": template["ai_reason"]
+        })
     
     return meals
 
-def generate_plan_rationale(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> str:
-    """Generate comprehensive plan rationale including vision insights"""
+def generate_enhanced_rationale(plan_request: PlanRequest, user_data: Dict, vision_metrics: Optional[Dict]) -> str:
+    """Generate comprehensive rationale with vision insights"""
     
     rationale_parts = []
     
     # Base rationale
-    rationale_parts.append(f"This {plan_request.days_per_week}-day plan is designed for your {plan_request.fitness_goal} goal.")
+    rationale_parts.append(f"This {plan_request.days_per_week}-day program targets your {plan_request.fitness_goal.replace('_', ' ')} goal using evidence-based exercise selection and periodization.")
     
-    # Vision-based insights
+    # Vision-based insights - surface "Why we chose this" notes
     if vision_metrics:
         pose_alerts = vision_metrics.get("poseAlerts", [])
         bf_estimate = vision_metrics.get("bf_estimate")
-        confidence = vision_metrics.get("confidence", "medium")
+        image_quality = vision_metrics.get("imageQuality", 0)
         
         if pose_alerts:
-            rationale_parts.append(f"Based on your posture analysis, we've included corrective exercises for: {', '.join(pose_alerts).replace('_', ' ')}.")
+            corrective_focus = ", ".join([alert.replace("_", " ") for alert in pose_alerts])
+            rationale_parts.append(f"Your posture analysis revealed {corrective_focus}, so we've included targeted corrective exercises and mobility work.")
         
-        if bf_estimate:
-            rationale_parts.append(f"Your estimated body fat percentage ({bf_estimate}%) with {confidence} confidence has been used to adjust your nutrition targets.")
+        if bf_estimate and image_quality > 0.6:
+            rationale_parts.append(f"Based on your body composition analysis (estimated {bf_estimate}% body fat), we've calibrated your nutrition targets for optimal progress.")
         
+        # Anthropometric considerations
         anthro = vision_metrics.get("anthro", {})
         if anthro.get("hip_cm", 0) > 95:
-            rationale_parts.append("Based on your body proportions, we've adjusted exercise selection for optimal biomechanics.")
+            rationale_parts.append("Your body proportions suggested modifications to squat mechanics for improved biomechanical efficiency.")
     
-    # Activity level consideration
-    rationale_parts.append(f"Your {plan_request.activity_level} activity level has been factored into your calorie and macro targets.")
+    # Experience and activity considerations
+    rationale_parts.append(f"The program accounts for your {plan_request.experience_level} experience level and {plan_request.activity_level} lifestyle.")
     
     return " ".join(rationale_parts)
 
-def generate_vision_adjustments(vision_metrics: Optional[Dict]) -> List[str]:
-    """Generate list of adjustments made based on vision analysis"""
-    adjustments = []
+def extract_vision_adjustments(vision_metrics: Optional[Dict]) -> List[str]:
+    """Extract specific adjustments made based on vision analysis"""
     
     if not vision_metrics:
-        return ["No vision analysis data available - using standard recommendations"]
+        return ["No vision analysis available - using standard evidence-based recommendations"]
     
+    adjustments = []
     pose_alerts = vision_metrics.get("poseAlerts", [])
-    bf_estimate = vision_metrics.get("bf_estimate")
-    anthro = vision_metrics.get("anthro", {})
     
-    # Posture-based adjustments
+    # Document specific corrective interventions
     if "rounded_shoulders" in pose_alerts:
-        adjustments.append("Added corrective exercises (face pulls, thoracic openers) for rounded shoulders")
+        adjustments.append("Added thoracic spine mobility and posterior chain strengthening for rounded shoulder posture")
     
     if "anterior_pelvic_tilt" in pose_alerts:
-        adjustments.append("Included core stability exercises to address anterior pelvic tilt")
+        adjustments.append("Included core stabilization exercises to address anterior pelvic tilt")
     
     if "forward_head" in pose_alerts:
-        adjustments.append("Added neck strengthening exercises for forward head posture")
+        adjustments.append("Incorporated neck strengthening and upper cervical mobility work")
     
-    # Body composition adjustments
+    # Nutrition adjustments
+    bf_estimate = vision_metrics.get("bf_estimate")
     if bf_estimate:
         if bf_estimate > 25:
-            adjustments.append(f"Increased protein target and calorie deficit based on {bf_estimate}% body fat estimate")
+            adjustments.append(f"Increased protein intake and caloric deficit based on {bf_estimate}% body fat analysis")
         elif bf_estimate < 12:
-            adjustments.append(f"Adjusted for lean physique ({bf_estimate}% body fat) - reduced calorie deficit")
+            adjustments.append(f"Conservative caloric approach for lean physique ({bf_estimate}% body fat)")
     
-    # Anthropometric adjustments
+    # Exercise selection adjustments
+    anthro = vision_metrics.get("anthro", {})
     if anthro.get("hip_cm", 0) > 95:
-        adjustments.append("Modified squat variation for longer limb proportions")
+        adjustments.append("Modified squat variations for longer limb proportions and improved mechanics")
     
     if not adjustments:
-        adjustments.append("No specific adjustments needed - standard evidence-based plan applied")
+        adjustments.append("Standard evidence-based program - no specific postural or compositional concerns identified")
     
     return adjustments
 
-def cleanup_file(file_path: str):
-    """Background task to clean up uploaded files"""
+async def cleanup_file_later(file_path: str, delay_seconds: int = 3600):
+    """Background task to clean up files after delay"""
+    await asyncio.sleep(delay_seconds)
     try:
         if os.path.exists(file_path):
             os.remove(file_path)

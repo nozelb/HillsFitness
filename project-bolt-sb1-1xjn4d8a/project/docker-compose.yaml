@@ -1,6 +1,8 @@
+# docker-compose.yaml - Enhanced with Vision Pipeline
 version: '3.8'
 
 services:
+  # Main API service
   backend:
     build:
       context: .
@@ -13,8 +15,64 @@ services:
       - database_data:/app/data
     environment:
       - PYTHONPATH=/app
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_PATH=/app/data/gym_coach_enhanced.json
+      - UPLOAD_DIR=/app/uploads
+    depends_on:
+      - redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # Vision processing worker (GPU-optimized)
+  vision-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile-vision-worker
+    volumes:
+      - uploads_data:/app/uploads
+      - ./backend:/app
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_URL=redis://redis:6379
+      - UPLOAD_DIR=/app/uploads
+      - WORKER_CONCURRENCY=2
+    depends_on:
+      - redis
+    restart: unless-stopped
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for task queue and caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Frontend service
   frontend:
     build:
       context: .
@@ -24,7 +82,35 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Redis monitoring (development)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    profiles:
+      - dev
+    restart: unless-stopped
 
 volumes:
   uploads_data:
+    driver: local
   database_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: gym-ai-coach-network
