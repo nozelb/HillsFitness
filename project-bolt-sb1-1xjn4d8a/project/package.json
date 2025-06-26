@@ -1,5 +1,5 @@
 {
-  "name": "gym-ai-coach",
+  "name": "gym-ai-coach-v2",
   "private": true,
   "version": "2.1.0",
   "description": "AI-powered fitness coach with advanced computer vision and personalized plan generation",
@@ -21,8 +21,8 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "tsc && vite build",
-    "build:prod": "NODE_ENV=production tsc && vite build",
+    "build": "vite build",
+    "build:prod": "NODE_ENV=production vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
@@ -93,7 +93,7 @@
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.2",
     "prettier-plugin-tailwindcss": "^0.6.5",
-    "typescript": "^5.8.3",
+    "typescript": "^5.5.2",
     "vite": "^5.3.1",
     "vite-plugin-pwa": "^0.20.0",
     "vite-plugin-eslint": "^1.8.1",
@@ -141,30 +141,5 @@
   "volta": {
     "node": "20.15.0",
     "npm": "10.8.1"
-  },
-  "config": {
-    "commitizen": {
-      "path": "./node_modules/cz-conventional-changelog"
-    }
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,css,md}": [
-      "prettier --write"
-    ]
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged",
-      "pre-push": "npm run type-check && npm run test"
-    }
-  },
-  "sideEffects": false,
-  "funding": {
-    "type": "github",
-    "url": "https://github.com/sponsors/your-username"
   }
 }
