@@ -1,0 +1,170 @@
+{
+  "name": "gym-ai-coach",
+  "private": true,
+  "version": "2.1.0",
+  "description": "AI-powered fitness coach with advanced computer vision and personalized plan generation",
+  "type": "module",
+  "keywords": ["fitness", "ai", "computer-vision", "nutrition", "workout-plans", "pose-detection"],
+  "author": "Gym AI Coach Team",
+  "license": "MIT",
+  "homepage": "https://gymaicoach.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/gym-ai-coach.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/gym-ai-coach/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "tsc && vite build",
+    "build:prod": "NODE_ENV=production tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "clean": "rm -rf dist node_modules/.vite",
+    "analyze": "npx vite-bundle-analyzer dist/stats.html",
+    "docker:build": "docker build -f Dockerfile-frontend -t gym-ai-coach-frontend .",
+    "docker:run": "docker run -p 3000:3000 gym-ai-coach-frontend"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.22.3",
+    "react-hook-form": "^7.52.1",
+    "react-query": "^3.39.3",
+    "@tanstack/react-query": "^5.45.1",
+    "@tanstack/react-query-devtools": "^5.45.1",
+    "axios": "^1.7.2",
+    "lucide-react": "^0.400.0",
+    "recharts": "^2.12.7",
+    "date-fns": "^3.6.0",
+    "react-hot-toast": "^2.4.1",
+    "react-dropzone": "^14.2.3",
+    "react-pdf": "^8.0.2",
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1",
+    "framer-motion": "^11.2.12",
+    "react-intersection-observer": "^9.10.3",
+    "react-helmet-async": "^2.0.5",
+    "clsx": "^2.1.1",
+    "class-variance-authority": "^0.7.0",
+    "tailwind-merge": "^2.3.0",
+    "zod": "^3.23.8",
+    "@hookform/resolvers": "^3.6.0",
+    "js-cookie": "^3.0.5",
+    "react-webcam": "^7.2.0",
+    "react-image-crop": "^11.0.5",
+    "lodash": "^4.17.21",
+    "react-virtualized": "^9.22.5",
+    "react-window": "^1.8.8",
+    "react-chartjs-2": "^5.2.0",
+    "chart.js": "^4.4.3",
+    "react-confetti": "^6.1.0",
+    "react-loading-skeleton": "^3.4.0",
+    "react-error-boundary": "^4.0.13"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/js-cookie": "^3.0.6",
+    "@types/lodash": "^4.17.5",
+    "@types/react-virtualized": "^9.21.30",
+    "@types/react-window": "^1.8.8",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.7",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-jsx-a11y": "^6.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.2",
+    "prettier-plugin-tailwindcss": "^0.6.5",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^0.20.0",
+    "vite-plugin-eslint": "^1.8.1",
+    "vite-bundle-analyzer": "^0.7.0",
+    "vitest": "^1.6.0",
+    "@vitest/ui": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "jsdom": "^24.1.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/user-event": "^14.5.2",
+    "msw": "^2.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "@tailwindcss/forms": "^0.5.7",
+    "@tailwindcss/typography": "^0.5.13",
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "playwright": "^1.45.0",
+    "@playwright/test": "^1.45.0",
+    "cross-env": "^7.0.3",
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.7"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.18.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "packageManager": "npm@10.8.1",
+  "volta": {
+    "node": "20.15.0",
+    "npm": "10.8.1"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run type-check && npm run test"
+    }
+  },
+  "sideEffects": false,
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/your-username"
+  }
+}

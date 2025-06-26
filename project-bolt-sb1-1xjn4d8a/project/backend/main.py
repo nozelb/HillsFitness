@@ -137,7 +137,7 @@ class GeneratedPlan(BaseModel):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Gym AI Coach API - Vision Enhanced",
+    title="Gym AI Coach",
     description="AI-powered fitness planning with advanced computer vision",
     version="2.1.0"
 )
@@ -254,7 +254,7 @@ async def process_vision_analysis(image_path: str, user_id: str, height_cm: floa
 async def root():
     """Root endpoint with service status"""
     return {
-        "message": "Gym AI Coach API v2.1 - Vision Enhanced", 
+        "message": "Gym AI Coach", 
         "status": "running",
         "features": ["advanced_pose_detection", "body_composition_estimation", "posture_analysis"],
         "vision_worker": "enabled" if vision_queue_client else "disabled",

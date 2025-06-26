@@ -35,7 +35,7 @@ email-validator==2.2.0
 
 # Security
 bcrypt==4.0.1
-cryptography==41.0.8
+cryptography>=41.0.7,<43.0.0
 
 # Background Tasks (Redis optional for production)
 celery==5.3.0

@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     # Application settings
-    app_name: str = "Gym AI Coach API Enhanced"
+    app_name: str = "Gym AI Coach"
     version: str = "2.1.0"
     debug: bool = True
     
